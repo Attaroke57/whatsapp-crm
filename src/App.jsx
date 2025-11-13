@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Send, Search, Menu, MoreVertical } from "lucide-react";
 import "./index.css";
 
@@ -9,16 +9,18 @@ export default function WhatsAppCRM() {
   const [searchQuery, setSearchQuery] = useState("");
   const [replyText, setReplyText] = useState("");
   const [loading, setLoading] = useState(true);
+  const messagesEndRef = useRef(null);
 
   // Load messages from storage on mount
   useEffect(() => {
     loadMessages();
 
-    // Refresh every 3 seconds
+    // Refresh every 5 seconds, tapi tidak saat user lagi lihat chat
     const interval = setInterval(() => {
+      if (document.hidden) return; // Stop jika browser tidak aktif
       loadMessages();
       fetchFromVercel();
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -145,6 +147,11 @@ export default function WhatsAppCRM() {
     return date.toLocaleDateString("id-ID");
   };
 
+  // Auto scroll ke bawah saat ada pesan baru
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [selectedMessages]);
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar - Contacts */}
@@ -265,6 +272,7 @@ export default function WhatsAppCRM() {
                   </div>
                 ))
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
