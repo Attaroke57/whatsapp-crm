@@ -30,8 +30,9 @@ export default function WhatsAppCRM() {
 
   const fetchFromVercel = async () => {
     try {
+      // Update ke endpoint baru /api/messages
       const response = await fetch(
-        "https://whatsapp-webhook-vercel-two.vercel.app/api/webhook?logs=true"
+        "https://whatsapp-webhook-vercel-two.vercel.app/api/messages"
       );
       const data = await response.json();
 
@@ -53,7 +54,7 @@ export default function WhatsAppCRM() {
         loadMessages();
       }
     } catch (error) {
-      console.log("Error fetching:", error);
+      console.log("Error fetching from Vercel:", error);
     }
   };
 
@@ -62,12 +63,12 @@ export default function WhatsAppCRM() {
       const saved = localStorage.getItem("whatsapp-messages");
       const msgs = saved ? JSON.parse(saved) : [];
 
-      const existingMsgIds = new Set(messages.map(m => m.id));
-      const newMsgIds = new Set(msgs.map(m => m.id));
+      const existingMsgIds = new Set(messages.map((m) => m.id));
+      const newMsgIds = new Set(msgs.map((m) => m.id));
 
       const hasChanges =
         msgs.length !== messages.length ||
-        [...newMsgIds].some(id => !existingMsgIds.has(id));
+        [...newMsgIds].some((id) => !existingMsgIds.has(id));
 
       if (!hasChanges && contacts.length > 0) return;
 
@@ -95,8 +96,7 @@ export default function WhatsAppCRM() {
       setContacts(contactList);
 
       setTimeout(() => {
-        if (sidebarRef.current)
-          sidebarRef.current.scrollTop = sidebarScroll;
+        if (sidebarRef.current) sidebarRef.current.scrollTop = sidebarScroll;
       }, 0);
 
       if (!selectedContactRef.current && contactList.length > 0) {
@@ -146,6 +146,35 @@ export default function WhatsAppCRM() {
     }
   };
 
+  const deleteChat = (phone) => {
+    if (
+      window.confirm(
+        `Hapus chat dengan ${contacts.find((c) => c.phone === phone)?.name}?`
+      )
+    ) {
+      // Hapus pesan dari contact tertentu
+      const updatedMessages = messages.filter((m) => m.from !== phone);
+      setMessages(updatedMessages);
+      localStorage.setItem(
+        "whatsapp-messages",
+        JSON.stringify(updatedMessages)
+      );
+
+      // Update contacts
+      const updatedContacts = contacts.filter((c) => c.phone !== phone);
+      setContacts(updatedContacts);
+
+      // Reset selected contact
+      if (selectedContact === phone) {
+        setSelectedContact(
+          updatedContacts.length > 0 ? updatedContacts[0].phone : null
+        );
+        selectedContactRef.current =
+          updatedContacts.length > 0 ? updatedContacts[0].phone : null;
+      }
+    }
+  };
+
   const filteredContacts = contacts.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -170,7 +199,6 @@ export default function WhatsAppCRM() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-
       {/* Sidebar */}
       <div className="w-80 bg-white border-r border-gray-300 flex flex-col">
         <div className="p-4 border-b header-wa flex justify-between items-center">
@@ -219,7 +247,9 @@ export default function WhatsAppCRM() {
                 }`}
               >
                 <p className="font-medium text-gray-900">{contact.name}</p>
-                <p className="text-sm text-gray-600 truncate">{contact.lastMessage}</p>
+                <p className="text-sm text-gray-600 truncate">
+                  {contact.lastMessage}
+                </p>
               </div>
             ))
           )}
