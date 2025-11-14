@@ -1,4 +1,66 @@
+@tailwind base;
+@tailwind components;
 @tailwind utilities;
-@import "tailwindcss";
-@import "tailwindcss/base";
-@import "tailwindcss/components";
+
+/* Wallpaper WhatsApp */
+.chat-wallpaper {
+  background-image: url("assets/img/wlpp.jpg");
+  background-size: 1600px;
+  background-repeat: repeat;
+  opacity: 30;
+}
+
+/* BUBBLE IN (pesan masuk) */
+.bubble-in {
+  background: white;
+  color: #111;
+  padding: 10px 14px;
+  max-width: 75%;
+  border-radius: 18px;
+  border-top-left-radius: 4px;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Ekor bubble IN */
+.bubble-in::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  bottom: 0px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+/* BUBBLE OUT (pesan keluar) */
+.bubble-out {
+  background: #DCF8C6; /* warna WA asli */
+  color: #111;
+  padding: 10px 14px;
+  max-width: 75%;
+  border-radius: 18px;
+  border-top-right-radius: 4px;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Ekor bubble OUT */
+.bubble-out::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  bottom: 0px;
+  width: 12px;
+  height: 12px;
+  background: #DCF8C6;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+/* Header WhatsApp */
+.header-wa {
+  background: #128C7E;
+  color: white;
+  border-color: #0f7a6d;
+}

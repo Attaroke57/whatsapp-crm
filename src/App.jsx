@@ -9,15 +9,18 @@ export default function WhatsAppCRM() {
   const [searchQuery, setSearchQuery] = useState("");
   const [replyText, setReplyText] = useState("");
   const [loading, setLoading] = useState(true);
+  const selectedContactRef = useRef(null);
+
+  const sidebarRef = useRef(null);
+  const [sidebarScroll, setSidebarScroll] = useState(0);
+
   const messagesEndRef = useRef(null);
 
-  // Load messages from storage on mount
   useEffect(() => {
     loadMessages();
 
-    // Refresh every 5 seconds, tapi tidak saat user lagi lihat chat
     const interval = setInterval(() => {
-      if (document.hidden) return; // Stop jika browser tidak aktif
+      if (document.hidden) return;
       loadMessages();
       fetchFromVercel();
     }, 5000);
@@ -33,12 +36,10 @@ export default function WhatsAppCRM() {
       const data = await response.json();
 
       if (data.messages && data.messages.length > 0) {
-        // Ambil existing messages dari localStorage
         const existing = JSON.parse(
           localStorage.getItem("whatsapp-messages") || "[]"
         );
 
-        // Merge dan hilangkan duplikat berdasarkan ID
         const merged = [...existing];
 
         data.messages.forEach((newMsg) => {
@@ -47,25 +48,31 @@ export default function WhatsAppCRM() {
           }
         });
 
-        // Simpan kembali
         localStorage.setItem("whatsapp-messages", JSON.stringify(merged));
 
-        // Reload messages di UI
         loadMessages();
       }
     } catch (error) {
-      console.log("Error fetching from Vercel:", error);
+      console.log("Error fetching:", error);
     }
   };
 
   const loadMessages = () => {
     try {
-      // Ambil dari localStorage
       const saved = localStorage.getItem("whatsapp-messages");
       const msgs = saved ? JSON.parse(saved) : [];
+
+      const existingMsgIds = new Set(messages.map(m => m.id));
+      const newMsgIds = new Set(msgs.map(m => m.id));
+
+      const hasChanges =
+        msgs.length !== messages.length ||
+        [...newMsgIds].some(id => !existingMsgIds.has(id));
+
+      if (!hasChanges && contacts.length > 0) return;
+
       setMessages(msgs);
 
-      // Extract unique contacts
       const contactMap = {};
       msgs.forEach((msg) => {
         if (!contactMap[msg.from]) {
@@ -74,21 +81,35 @@ export default function WhatsAppCRM() {
             name: `Contact ${msg.from.slice(-4)}`,
             lastMessage: msg.text,
             lastTime: msg.timestamp,
-            unread: 0,
           };
+        } else {
+          contactMap[msg.from].lastMessage = msg.text;
+          contactMap[msg.from].lastTime = msg.timestamp;
         }
-        contactMap[msg.from].lastMessage = msg.text;
-        contactMap[msg.from].lastTime = msg.timestamp;
       });
 
-      const contactList = Object.values(contactMap).reverse();
+      const contactList = Object.values(contactMap).sort(
+        (a, b) => new Date(b.lastTime) - new Date(a.lastTime)
+      );
+
       setContacts(contactList);
-      if (contactList.length > 0 && !selectedContact) {
+
+      setTimeout(() => {
+        if (sidebarRef.current)
+          sidebarRef.current.scrollTop = sidebarScroll;
+      }, 0);
+
+      if (!selectedContactRef.current && contactList.length > 0) {
+        selectedContactRef.current = contactList[0].phone;
         setSelectedContact(contactList[0].phone);
       }
+
+      if (selectedContactRef.current)
+        setSelectedContact(selectedContactRef.current);
+
       setLoading(false);
-    } catch (error) {
-      console.log("Error loading messages:", error);
+    } catch (e) {
+      console.log("Error load:", e);
       setLoading(false);
     }
   };
@@ -106,26 +127,29 @@ export default function WhatsAppCRM() {
 
     const updatedMessages = [...messages, newMessage];
 
-    // Simpan ke localStorage
     localStorage.setItem("whatsapp-messages", JSON.stringify(updatedMessages));
 
     setMessages(updatedMessages);
     setReplyText("");
-    console.log("Pesan tersimpan:", newMessage);
+
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
   };
 
-  const clearAllMessages = async () => {
+  const clearAllMessages = () => {
     if (window.confirm("Hapus semua pesan?")) {
       setMessages([]);
       setContacts([]);
       setSelectedContact(null);
+      localStorage.removeItem("whatsapp-messages");
     }
   };
 
   const filteredContacts = contacts.filter(
-    (contact) =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.phone.includes(searchQuery)
+    (c) =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.phone.includes(searchQuery)
   );
 
   const selectedMessages = selectedContact
@@ -134,41 +158,29 @@ export default function WhatsAppCRM() {
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Baru saja";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString("id-ID");
+    return date.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
-  // Auto scroll ke bawah saat ada pesan baru
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedMessages]);
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar - Contacts */}
-      <div className="w-80 bg-white border-r border-gray-300 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-300 bg-gray-50">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-gray-800">WhatsApp CRM</h1>
-            <button
-              onClick={clearAllMessages}
-              className="text-gray-500 hover:text-red-500"
-            >
-              <MoreVertical size={20} />
-            </button>
-          </div>
 
-          {/* Search */}
+      {/* Sidebar */}
+      <div className="w-80 bg-white border-r border-gray-300 flex flex-col">
+        <div className="p-4 border-b header-wa flex justify-between items-center">
+          <h1 className="text-xl font-semibold">WhatsApp CRM</h1>
+          <button onClick={clearAllMessages} className="text-white/80">
+            <MoreVertical size={20} />
+          </button>
+        </div>
+
+        <div className="p-3 bg-gray-100 border-b">
           <div className="relative">
             <Search size={18} className="absolute left-3 top-3 text-gray-400" />
             <input
@@ -176,70 +188,63 @@ export default function WhatsAppCRM() {
               placeholder="Cari kontak..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-200 rounded-full text-sm focus:outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-white border rounded-full text-sm"
             />
           </div>
         </div>
 
-        {/* Contacts List */}
-        <div className="flex-1 overflow-y-auto">
+        <div
+          className="flex-1 overflow-y-auto"
+          ref={sidebarRef}
+          onScroll={() => {
+            setSidebarScroll(sidebarRef.current.scrollTop);
+          }}
+        >
           {filteredContacts.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
+            <p className="p-4 text-center text-gray-500">
               {loading ? "Loading..." : "Belum ada pesan"}
-            </div>
+            </p>
           ) : (
             filteredContacts.map((contact) => (
               <div
                 key={contact.phone}
-                onClick={() => setSelectedContact(contact.phone)}
-                className={`p-4 border-b border-gray-200 cursor-pointer transition ${
+                onClick={() => {
+                  setSelectedContact(contact.phone);
+                  selectedContactRef.current = contact.phone;
+                }}
+                className={`p-4 border-b cursor-pointer transition ${
                   selectedContact === contact.phone
-                    ? "bg-blue-50 border-l-4 border-l-blue-500"
+                    ? "bg-green-50 border-l-4 border-green-500"
                     : "hover:bg-gray-50"
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{contact.name}</p>
-                    <p className="text-sm text-gray-600 truncate">
-                      {contact.lastMessage}
-                    </p>
-                  </div>
-                  <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                    {formatTime(contact.lastTime)}
-                  </span>
-                </div>
+                <p className="font-medium text-gray-900">{contact.name}</p>
+                <p className="text-sm text-gray-600 truncate">{contact.lastMessage}</p>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* Chat Area */}
+      {/* Chat */}
       <div className="flex-1 flex flex-col bg-white">
         {selectedContact ? (
           <>
-            {/* Chat Header */}
-            <div className="p-4 border-b border-gray-300 bg-gray-50 flex justify-between items-center">
+            <div className="p-4 border-b header-wa flex justify-between">
               <div>
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold">
                   {contacts.find((c) => c.phone === selectedContact)?.name}
                 </p>
-                <p className="text-sm text-gray-600">{selectedContact}</p>
+                <p className="text-sm opacity-80">{selectedContact}</p>
               </div>
-              <button className="text-gray-500 hover:text-gray-700">
-                <MoreVertical size={20} />
-              </button>
+              <MoreVertical size={22} className="opacity-80" />
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-              {selectedMessages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-10">
-                  Mulai percakapan
-                </div>
-              ) : (
-                selectedMessages.map((msg, idx) => (
+            <div className="flex-1 overflow-y-auto p-6 relative">
+              <div className="absolute inset-0 chat-wallpaper"></div>
+
+              <div className="relative z-10 space-y-4">
+                {selectedMessages.map((msg, idx) => (
                   <div
                     key={idx}
                     className={`flex ${
@@ -249,55 +254,45 @@ export default function WhatsAppCRM() {
                     }`}
                   >
                     <div
-                      className={`max-w-xs px-4 py-2 rounded-lg ${
+                      className={
                         msg.direction === "outgoing"
-                          ? "bg-blue-500 text-white rounded-br-none"
-                          : "bg-gray-300 text-gray-900 rounded-bl-none"
-                      }`}
+                          ? "bubble-out"
+                          : "bubble-in"
+                      }
                     >
-                      <p className="text-sm break-words">{msg.text}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          msg.direction === "outgoing"
-                            ? "text-blue-100"
-                            : "text-gray-600"
-                        }`}
-                      >
-                        {new Date(msg.timestamp).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <p>{msg.text}</p>
+                      <p className="text-[10px] opacity-70 text-right mt-1">
+                        {formatTime(msg.timestamp)}
                       </p>
                     </div>
                   </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
+                ))}
+
+                <div ref={messagesEndRef} />
+              </div>
             </div>
 
-            {/* Input Area */}
-            <div className="p-4 border-t border-gray-300 bg-white flex gap-3">
+            <div className="p-4 border-t bg-white flex gap-3">
               <input
                 type="text"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSendReply()}
+                onKeyDown={(e) => e.key === "Enter" && handleSendReply()}
                 placeholder="Balas pesan..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:border-blue-500"
+                className="flex-1 px-4 py-2 border rounded-full"
               />
               <button
                 onClick={handleSendReply}
-                disabled={!replyText.trim()}
-                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 rounded-full transition"
+                className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-full"
               >
                 <Send size={20} />
               </button>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-500">
+          <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
-              <Menu size={48} className="mx-auto mb-4 text-gray-300" />
+              <Menu size={48} className="mx-auto mb-4 opacity-30" />
               <p>Pilih kontak untuk memulai</p>
             </div>
           </div>
